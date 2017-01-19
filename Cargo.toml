@@ -1,0 +1,7 @@
+[package]
+name = "lblob2csv"
+version = "0.0.1"
+authors = ["Norman Köhring <norman.koehring@fromatob.com>"]
+
+[dependencies]
+regex = "0.2"

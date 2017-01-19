@@ -2,7 +2,7 @@ extern crate regex;
 
 use std::env;
 use std::io::prelude::*;
-use std::io::BufReader;
+use std::io;
 use std::fs::File;
 use std::path::Path;
 use std::collections::BTreeSet;
@@ -15,8 +15,7 @@ fn read_ids<P>(filename: P) -> BTreeSet<String>
   {
     let mut set = BTreeSet::<String>::new();
     let file = File::open(filename).expect("Cannot find IDs file!");
-    let reader = BufReader::new(file);
-
+    let reader = io::BufReader::new(file);
 
     for line in reader.lines() {
       let l = line.unwrap();
@@ -27,16 +26,11 @@ fn read_ids<P>(filename: P) -> BTreeSet<String>
   }
 
 
-fn check_log<P>(log_path: P, mut ids: BTreeSet<String>) -> Counts
-  where P: AsRef<Path>,
-  {
+fn check_log(mut ids: BTreeSet<String>) -> Counts {
     // TODO: speed up by catching both URLs at once and use string comparison
     // like `url = re.capures[1]; id = re.captures[2]`; url == format!(hobbit_url, id)
     let re_hobbit = Regex::new("^.*requestUrl\":\"https://www..+/payment/([a-zA-Z0-9-]{36}).*$").unwrap();
     let re_columbus = Regex::new("^.*requestUrl\":\"https://www..+/order/profiles/([a-zA-Z0-9-]{36})/payments/new.*$").unwrap();
-
-    let log_file = File::open(log_path).expect("Cannot find log file!");
-    let reader = BufReader::new(log_file);
 
     let mut count = Counts {
       hobbit: 0,
@@ -46,7 +40,10 @@ fn check_log<P>(log_path: P, mut ids: BTreeSet<String>) -> Counts
       total_paid: ids.len(),
     };
 
-    for some_line in reader.lines() {
+    let stdin = io::stdin();
+    let handle = stdin.lock();
+
+    for some_line in handle.lines() {
       let line = some_line.unwrap();
 
       if !line.contains(":200,") { continue; }  // only status code 200 is interesting
@@ -76,25 +73,24 @@ struct Counts {
 
 fn main() {
   let args: Vec<_> = env::args().collect();
-  if args.len() < 3 {
-    println!("Usage: {} file_with_paid_ids log_file", args[0]);
+  if args.len() < 2 {
+    println!("Usage: {} file_with_paid_ids < log_file", args[0]);
     return
   }
 
   let ids_path = args[1].clone();
-  let log_path = args[2].clone();
-
   let ids = read_ids(ids_path);
+  let count = check_log(ids);
 
-  let count = check_log(log_path, ids);
-
+  /* TODO: conversion rates are wrong as long as not only unique visits are counted
   let hobbit_con_perc = (count.hobbit_paid as f64) * 100.0 / (count.hobbit as f64);
   let columbus_con_perc = (count.columbus_paid as f64) * 100.0 / (count.columbus as f64);
+  */
 
   let hobbit_pay_perc = (count.hobbit_paid as f64) * 100.0 / (count.total_paid as f64);
   let columbus_pay_perc = (count.columbus_paid as f64) * 100.0 / (count.total_paid as f64);
 
-  println!("hobbit:   {:3} calls lead to {:3} payments, that's {:.2}% of payments and {:.2}% conversion", count.hobbit, count.hobbit_paid, hobbit_pay_perc, hobbit_con_perc);
-  println!("columbus: {:3} calls lead to {:3} payments, that's {:.2}% of payments and {:.2}% conversion", count.columbus, count.columbus_paid, columbus_pay_perc, columbus_con_perc);
+  println!("hobbit:   {:3} calls lead to {:3} payments, that's {:.2}% of payments", count.hobbit, count.hobbit_paid, hobbit_pay_perc);
+  println!("columbus: {:3} calls lead to {:3} payments, that's {:.2}% of payments", count.columbus, count.columbus_paid, columbus_pay_perc);
   println!("Total payments recorded: {}",  count.total_paid);
 }

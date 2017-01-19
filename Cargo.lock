@@ -1,5 +1,5 @@
 [root]
-name = "lblob2csv"
+name = "blob"
 version = "0.0.1"
 dependencies = [
  "regex 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",

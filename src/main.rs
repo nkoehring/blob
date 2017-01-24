@@ -27,10 +27,14 @@ fn read_ids<P>(filename: P) -> BTreeSet<String>
 
 
 fn check_log(mut ids: BTreeSet<String>) -> Counts {
-    // TODO: speed up by catching both URLs at once and use string comparison
-    // like `url = re.capures[1]; id = re.captures[2]`; url == format!(hobbit_url, id)
-    let re_hobbit = Regex::new("^.*requestUrl\":\"https://www..+/payment/([a-zA-Z0-9-]{36}).*$").unwrap();
-    let re_columbus = Regex::new("^.*requestUrl\":\"https://www..+/order/profiles/([a-zA-Z0-9-]{36})/payments/new.*$").unwrap();
+    // capture groups:
+    //   1: path (for example "payment/8cff8e51-5dab-4c72-b534-25b73466d2e3")
+    //   2: id if path is hobbit
+    //   3: id if path is columbus
+    let re = Regex::new("requestUrl\":\"https://www..+/(payment/([a-fA-F0-9-]{36})|order/profiles/([a-fA-F0-9-]{36})/payments/new)\"").unwrap();
+
+    // regular expression to get the IP address
+    let re_addr = Regex::new("remoteIp\":\"([0-9.]+)\"").unwrap();
 
     let mut count = Counts {
       hobbit: 0,
@@ -39,6 +43,9 @@ fn check_log(mut ids: BTreeSet<String>) -> Counts {
       columbus_paid: 0,
       total_paid: ids.len(),
     };
+
+    // save ip:id combination to ensure unique counts
+    let mut set = BTreeSet::<String>::new();
 
     let stdin = io::stdin();
     let handle = stdin.lock();
@@ -49,13 +56,31 @@ fn check_log(mut ids: BTreeSet<String>) -> Counts {
       if !line.contains(":200,") { continue; }  // only status code 200 is interesting
       if !line.contains("/payment/") && !line.contains("/payments/new") { continue; }  // no one cares about assets
 
-      if let Some(caps_hobbit) = re_hobbit.captures(&line) {
-        count.hobbit += 1;
-        if ids.remove(&caps_hobbit[1]) { count.hobbit_paid += 1; }
+      if let Some(captures) = re.captures(&line) {
+        if let Some(ip_capture) = re_addr.captures(&line) {
+          let mut ip = ip_capture[1].to_owned();
 
-      } else if let Some(caps_columbus) = re_columbus.captures(&line) {
-        count.columbus += 1;
-        if ids.remove(&caps_columbus[1]) { count.columbus_paid += 1; }
+          // capture group 2 only exists for hobbit URLs
+          if captures.get(2).is_some() {
+            let id = &captures[2];
+            ip.push_str(id);
+
+            if set.insert(ip) {
+              count.hobbit += 1;
+              if ids.remove(id) { count.hobbit_paid += 1; }
+            }
+
+          // capture group 3 only exists for columbus URLs
+          } else if captures.get(3).is_some() {
+            let id = &captures[3];
+            ip.push_str(id);
+
+            if set.insert(ip) {
+              count.columbus += 1;
+              if ids.remove(id) { count.columbus_paid += 1; }
+            }
+          }
+        }
       }
     }
 
@@ -92,5 +117,5 @@ fn main() {
 
   println!("hobbit:   {:3} calls lead to {:3} payments, that's {:.2}% of payments", count.hobbit, count.hobbit_paid, hobbit_pay_perc);
   println!("columbus: {:3} calls lead to {:3} payments, that's {:.2}% of payments", count.columbus, count.columbus_paid, columbus_pay_perc);
-  println!("Total payments recorded: {}",  count.total_paid);
+  println!("{} of {} total payments", count.hobbit_paid + count.columbus_paid, count.total_paid);
 }

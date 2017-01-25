@@ -2,6 +2,8 @@
 name = "blob"
 version = "0.0.1"
 authors = ["Norman Köhring <norman.koehring@fromatob.com>"]
+description = "raw log data scanner"
 
 [dependencies]
 regex = "0.2"
+clap = "2.20.0"

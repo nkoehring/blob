@@ -1,12 +1,14 @@
+#[macro_use]
+extern crate clap;
 extern crate regex;
 
-use std::env;
 use std::io::prelude::*;
 use std::io;
 use std::fs::File;
 use std::path::Path;
 use std::collections::{BTreeSet, BTreeMap};
 
+use clap::App;
 use regex::Regex;
 
 
@@ -153,13 +155,14 @@ struct Counts {
 }
 
 fn main() {
-  let args: Vec<_> = env::args().collect();
-  if args.len() < 2 {
-    println!("Usage: {} file_with_paid_ids < log_file", args[0]);
-    return
-  }
+  let args = App::new(crate_name!())
+      .version(crate_version!())
+      .author(crate_authors!("\n"))
+      .about(crate_description!())
+      .args_from_usage("<ids_path> 'Path of CSV or plain text file with IDs to check for'")
+      .get_matches();
 
-  let ids_path = args[1].clone();
+  let ids_path = args.value_of("ids_path").unwrap();
 
   let ids = match ids_path.ends_with(".csv") {
     true => read_csv(ids_path),

@@ -7,6 +7,7 @@ use std::io;
 use std::fs::File;
 use std::path::Path;
 use std::collections::{BTreeSet, BTreeMap};
+use std::default::Default;
 
 use clap::App;
 use regex::Regex;
@@ -60,21 +61,8 @@ fn check_log(mut ids: BTreeMap<String, String>) -> Counts {
     // regular expression to get the IP address
     let re_addr = Regex::new("remoteIp\":\"([0-9.]+)\"").unwrap();
 
-    let mut count = Counts {
-      hobbit: 0,
-      columbus: 0,
-      hobbit_paid: 0,
-      columbus_paid: 0,
-      total_paid: ids.len(),
-      hobbit_credit_card: 0,
-      hobbit_paypal: 0,
-      hobbit_paypal_vault: 0,
-      hobbit_sofort: 0,
-      columbus_credit_card: 0,
-      columbus_paypal: 0,
-      columbus_paypal_vault: 0,
-      columbus_sofort: 0,
-    };
+    // yay to default values! https://doc.rust-lang.org/stable/std/default/trait.Default.html
+    let mut count: Counts = Default::default();
 
     // save ip:id combination to ensure unique counts
     let mut set = BTreeSet::<String>::new();
@@ -135,9 +123,32 @@ fn check_log(mut ids: BTreeMap<String, String>) -> Counts {
     }
 
     count
-  }
+}
+
+fn print_stats_for_humans(count: Counts) {
+  let hobbit_con_perc = (count.hobbit_paid as f64) * 100.0 / (count.hobbit as f64);
+  let columbus_con_perc = (count.columbus_paid as f64) * 100.0 / (count.columbus as f64);
+
+  let hobbit_pay_perc = (count.hobbit_paid as f64) * 100.0 / ((count.hobbit_paid + count.columbus_paid) as f64);
+  let columbus_pay_perc = (count.columbus_paid as f64) * 100.0 / ((count.hobbit_paid + count.columbus_paid) as f64);
+
+  println!("hobbit:   {:3} calls lead to {:3} payments, that's {:.2}% of payments and a conversion rate of {:.2}%", count.hobbit, count.hobbit_paid, hobbit_pay_perc, hobbit_con_perc);
+  println!("columbus: {:3} calls lead to {:3} payments, that's {:.2}% of payments and a conversion rate of {:.2}%", count.columbus, count.columbus_paid, columbus_pay_perc, columbus_con_perc);
+  println!("{} of {} total payments", count.hobbit_paid + count.columbus_paid, count.total_paid);
+  println!("Hobbit   pp / cc / sofort: {:3} / {:3} / {:3}", count.hobbit_paypal + count.hobbit_paypal_vault, count.hobbit_credit_card, count.hobbit_sofort);
+  println!("Columbus pp / cc / sofort: {:3} / {:3} / {:3}", count.columbus_paypal + count.columbus_paypal_vault, count.columbus_credit_card, count.columbus_sofort);
+}
 
 
+// print statistics in CSV format visits, payments, pp, cc, sofort for hobbit and columbus in one line
+fn print_stats(count: Counts) {
+  println!("{},{},{},{},{},{},{},{},{},{}",
+    count.hobbit, count.hobbit_paid, count.hobbit_paypal + count.hobbit_paypal_vault, count.hobbit_credit_card, count.hobbit_sofort,
+    count.columbus, count.columbus_paid, count.columbus_paypal + count.columbus_paypal_vault, count.columbus_credit_card, count.columbus_sofort
+  );
+}
+
+#[derive(Default)]
 struct Counts {
   hobbit: usize,
   columbus: usize,
@@ -159,7 +170,8 @@ fn main() {
       .version(crate_version!())
       .author(crate_authors!("\n"))
       .about(crate_description!())
-      .args_from_usage("<ids_path> 'Path of CSV or plain text file with IDs to check for'")
+      .args_from_usage("-h, --human-readable 'Print statistics in a human readable format'
+                        <ids_path> 'Path of CSV or plain text file with IDs to check for'")
       .get_matches();
 
   let ids_path = args.value_of("ids_path").unwrap();
@@ -170,17 +182,9 @@ fn main() {
   };
   let count = check_log(ids);
 
-  /* TODO: conversion rates are wrong as long as not only unique visits are counted
-  let hobbit_con_perc = (count.hobbit_paid as f64) * 100.0 / (count.hobbit as f64);
-  let columbus_con_perc = (count.columbus_paid as f64) * 100.0 / (count.columbus as f64);
-  */
-
-  let hobbit_pay_perc = (count.hobbit_paid as f64) * 100.0 / ((count.hobbit_paid + count.columbus_paid) as f64);
-  let columbus_pay_perc = (count.columbus_paid as f64) * 100.0 / ((count.hobbit_paid + count.columbus_paid) as f64);
-
-  println!("hobbit:   {:3} calls lead to {:3} payments, that's {:.2}% of payments", count.hobbit, count.hobbit_paid, hobbit_pay_perc);
-  println!("columbus: {:3} calls lead to {:3} payments, that's {:.2}% of payments", count.columbus, count.columbus_paid, columbus_pay_perc);
-  println!("{} of {} total payments", count.hobbit_paid + count.columbus_paid, count.total_paid);
-  println!("Hobbit   pp / cc / sofort: {:3} / {:3} / {:3}", count.hobbit_paypal + count.hobbit_paypal_vault, count.hobbit_credit_card, count.hobbit_sofort);
-  println!("Columbus pp / cc / sofort: {:3} / {:3} / {:3}", count.columbus_paypal + count.columbus_paypal_vault, count.columbus_credit_card, count.columbus_sofort);
+  if args.is_present("human-readable") {
+    print_stats_for_humans(count);
+  } else {
+    print_stats(count);
+  }
 }

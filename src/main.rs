@@ -62,7 +62,7 @@ fn check_log(mut ids: BTreeMap<String, String>) -> Counts {
     let re_addr = Regex::new("remoteIp\":\"([0-9.]+)\"").unwrap();
 
     // yay to default values! https://doc.rust-lang.org/stable/std/default/trait.Default.html
-    let mut count: Counts = Default::default();
+    let mut count = Counts { total_paid: ids.len(), ..Default::default() };
 
     // save ip:id combination to ensure unique counts
     let mut set = BTreeSet::<String>::new();
